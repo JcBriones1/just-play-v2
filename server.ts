@@ -16,10 +16,14 @@ app.use('/api/youtube/download', (req, res, next) => {
   const origin = req.get('origin');
   if (!origin) return next();
 
-  let allowed = origin === 'https://localhost' || origin === 'http://localhost';
+  let allowed = false;
   try {
     const requestOrigin = new URL(origin);
     if (requestOrigin.hostname === 'localhost' && ['http:', 'https:'].includes(requestOrigin.protocol)) {
+      allowed = true;
+    }
+    const requestHost = req.get('host');
+    if (requestHost && requestOrigin.host.toLowerCase() === requestHost.toLowerCase()) {
       allowed = true;
     }
     if (process.env.APP_URL && requestOrigin.origin === new URL(process.env.APP_URL).origin) {
