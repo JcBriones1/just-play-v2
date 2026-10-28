@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">JustPlay</string>
+    <string name="title_activity_main">JustPlay</string>
+    <string name="package_name">com.justplay.music</string>
+    <string name="custom_url_scheme">com.justplay.music</string>
+</resources>

@@ -1,0 +1,6 @@
+{
+  "name": "AuraStream Music",
+  "description": "Free ad-free music player mobile web app featuring offline caching, customizable playlists, live lyrics, visualizer, and seamless cross-device synchronization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

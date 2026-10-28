@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>JustPlay Music</title>
+    <meta name="description" content="Free ad-free music player mobile web app featuring offline caching, customizable playlists, live lyrics, visualizer, and seamless cross-device synchronization." />
+    <meta property="og:title" content="JustPlay Music" />
+    <meta property="og:description" content="Free ad-free music player mobile web app featuring offline caching, customizable playlists, live lyrics, visualizer, and seamless cross-device synchronization." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    
+    <!-- Mobile App & PWA tags -->
+    <meta name="theme-color" content="#090a0f" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="JustPlay" />
+    <meta name="format-detection" content="telephone=no" />
+    
+    <!-- Icons -->
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+
+    <script>
+      // Ensure window.fetch has both getter and setter so browser extensions or interceptors
+      // attempting to wrap fetch (e.g. window.fetch = ...) don't throw "Cannot set property fetch which has only a getter"
+      (function() {
+        try {
+          const origFetch = window.fetch;
+          let activeFetch = typeof origFetch === 'function' ? origFetch.bind(window) : origFetch;
+          Object.defineProperty(window, 'fetch', {
+            configurable: true,
+            enumerable: true,
+            get: function() {
+              return activeFetch;
+            },
+            set: function(fn) {
+              activeFetch = fn;
+            }
+          });
+        } catch (_) {
+          // ignore if already non-configurable
+        }
+      })();
+
+      // Prevent Vite client from opening HMR WebSocket since HMR is disabled in AI Studio
+      (function() {
+        try {
+          const OrigWS = window.WebSocket;
+          if (OrigWS) {
+            window.WebSocket = function(url, protocols) {
+              const strUrl = String(url || '');
+              // If it's a Vite HMR connection or current host socket, provide a benign closed socket
+              if (strUrl.includes('vite') || strUrl.includes('/@vite/') || strUrl.includes('ais-dev') || strUrl.includes('token=')) {
+                return {
+                  binaryType: 'blob',
+                  bufferedAmount: 0,
+                  extensions: '',
+                  protocol: '',
+                  readyState: 3, // CLOSED
+                  url: strUrl,
+                  onopen: null,
+                  onclose: null,
+                  onerror: null,
+                  onmessage: null,
+                  addEventListener: function() {},
+                  removeEventListener: function() {},
+                  dispatchEvent: function() { return false; },
+                  send: function() {},
+                  close: function() {},
+                };
+              }
+              return new OrigWS(url, protocols);
+            };
+            window.WebSocket.prototype = OrigWS.prototype;
+            window.WebSocket.CONNECTING = OrigWS.CONNECTING;
+            window.WebSocket.OPEN = OrigWS.OPEN;
+            window.WebSocket.CLOSING = OrigWS.CLOSING;
+            window.WebSocket.CLOSED = OrigWS.CLOSED;
+          }
+        } catch (_) {}
+
+        // Filter out Vite WebSocket console errors since HMR is disabled
+        try {
+          const origConsoleError = console.error;
+          console.error = function(...args) {
+            const msg = args.map((a) => (a && (a.message || a.stack || String(a))) || '').join(' ');
+            if (msg.includes('WebSocket') || msg.includes('closed without opened') || (msg.includes('[vite]') && msg.includes('WebSocket'))) {
+              return;
+            }
+            origConsoleError.apply(console, args);
+          };
+        } catch (_) {}
+      })();
+
+      // Gracefully ignore third-party extension errors, disabled HMR WebSocket notices, and audio play interruptions
+      window.addEventListener('error', function(e) {
+        if (e.filename && e.filename.startsWith('chrome-extension://')) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+          return true;
+        }
+        const msg = String(e.message || (e.error && e.error.message) || '');
+        if (
+          msg.includes('Cannot set property fetch') ||
+          msg.includes('WebSocket') ||
+          msg.includes('closed without opened') ||
+          msg.includes('vite')
+        ) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+          return true;
+        }
+      }, true);
+
+      window.addEventListener('unhandledrejection', function(e) {
+        const reasonMsg = String((e.reason && (e.reason.message || e.reason.stack)) || e.reason || '');
+        if (
+          reasonMsg.includes('WebSocket') ||
+          reasonMsg.includes('closed without opened') ||
+          reasonMsg.includes('Cannot set property fetch') ||
+          (e.reason && e.reason.name === 'AbortError')
+        ) {
+          e.preventDefault();
+          return true;
+        }
+      });
+    </script>
+  </head>
+  <body class="bg-[#090a0f] text-slate-100 antialiased selection:bg-purple-600 selection:text-white overscroll-none overflow-x-hidden">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
