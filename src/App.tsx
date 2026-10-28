@@ -33,20 +33,40 @@ const STORAGE_LIKED_KEY = 'aura_liked_v5';
 const STORAGE_HISTORY_KEY = 'aura_history_v5';
 const STORAGE_TRACKS_KEY = 'aura_known_tracks_v5';
 const STORAGE_SETTINGS_KEY = 'aura_settings_v5';
-const STORAGE_CLEAN_RESTART_KEY = 'aura_clean_restart_v5';
 
-// Perform clean restart of all downloads, history, liked, and playlists per user instruction
-if (typeof window !== 'undefined' && !localStorage.getItem(STORAGE_CLEAN_RESTART_KEY)) {
-  try {
-    offlineStorage.clearAllDownloads();
-    for (let i = localStorage.length - 1; i >= 0; i--) {
-      const k = localStorage.key(i);
-      if (k && (k.startsWith('aura_') || k.startsWith('aurastream_'))) {
-        localStorage.removeItem(k);
-      }
-    }
-    localStorage.setItem(STORAGE_CLEAN_RESTART_KEY, 'true');
-  } catch (_) {}
+async function downloadTrackForOffline(
+  track: Track,
+  onProgress?: (percent: number) => void
+): Promise<boolean> {
+  if (!track.youtubeId) {
+    return offlineStorage.downloadTrack(track, onProgress);
+  }
+
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') || '';
+  const capacitor = (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+  if (capacitor?.isNativePlatform?.() && !apiBaseUrl) {
+    throw new Error('The download server URL is not configured for this app.');
+  }
+
+  const response = await fetch(`${apiBaseUrl}/api/youtube/download`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      url: `https://www.youtube.com/watch?v=${encodeURIComponent(track.youtubeId)}`,
+      title: track.title,
+    }),
+  });
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({})) as { error?: string };
+    throw new Error(errorBody.error || 'The audio could not be downloaded.');
+  }
+
+  const saved = await offlineStorage.saveAudioBlob(track, await response.blob());
+  if (!saved) {
+    throw new Error('The download service did not return a playable audio file.');
+  }
+  onProgress?.(100);
+  return true;
 }
 
 export default function App() {
@@ -632,32 +652,9 @@ export default function App() {
     let success = false;
     let failureMessage = '';
     try {
-      if (track.youtubeId) {
-        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') || '';
-        const capacitor = (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
-        if (capacitor?.isNativePlatform?.() && !apiBaseUrl) {
-          throw new Error('The download server URL is not configured for this app.');
-        }
-
-        const response = await fetch(`${apiBaseUrl}/api/youtube/download`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            url: `https://www.youtube.com/watch?v=${encodeURIComponent(track.youtubeId)}`,
-            title: track.title,
-          }),
-        });
-        if (!response.ok) {
-          const errorBody = await response.json().catch(() => ({})) as { error?: string };
-          throw new Error(errorBody.error || 'The audio could not be downloaded.');
-        }
-
-        success = await offlineStorage.saveAudioBlob(track, await response.blob());
-      } else {
-        success = await offlineStorage.downloadTrack(track, (percent) => {
-          setDownloadProgressMap((prev) => ({ ...prev, [track.id]: percent }));
-        });
-      }
+      success = await downloadTrackForOffline(track, (percent) => {
+        setDownloadProgressMap((prev) => ({ ...prev, [track.id]: percent }));
+      });
     } catch (error) {
       failureMessage = error instanceof Error ? error.message : `Could not download "${track.title}"`;
     }
@@ -688,11 +685,21 @@ export default function App() {
 
     showToast(`Downloading ${likedTracksToDownload.length} songs for offline listening...`);
 
+    let downloadedCount = 0;
     for (const track of likedTracksToDownload) {
-      await offlineStorage.downloadTrack(track);
+      try {
+        if (await downloadTrackForOffline(track)) downloadedCount++;
+      } catch (error) {
+        console.error(`Failed to download "${track.title}" for offline playback:`, error);
+      }
     }
     await refreshOfflineStats();
-    showToast(`✓ All ${likedTracksToDownload.length} liked songs cached offline!`);
+    const failedCount = likedTracksToDownload.length - downloadedCount;
+    showToast(
+      failedCount === 0
+        ? `✓ All ${downloadedCount} liked songs cached offline!`
+        : `Downloaded ${downloadedCount} liked songs; ${failedCount} could not be downloaded.`
+    );
   };
 
   const handleClearOfflineCache = async () => {
